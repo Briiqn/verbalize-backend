@@ -1,0 +1,170 @@
+syntax = "proto3";
+package dev.briiqn.verbalize.proto;
+
+option java_package = "dev.briiqn.verbalize.infrastructure.proto";
+option java_multiple_files = true;
+
+message ClientEnvelope {
+  uint32 sequence_number = 1;
+  oneof payload {
+    JoinCommand join = 10;
+    MovementInputCommand movement_input = 11;
+    VoiceStreamCommand voice_stream = 12;
+    NpcAudioInteractCommand npc_audio_interact = 13;
+    WorldInteractCommand world_interact = 14;
+    AvatarUpdateCommand avatar_update = 15;
+  }
+}
+
+message ServerEnvelope {
+  uint32 server_tick = 1;
+  oneof payload {
+    WelcomeEvent welcome = 10;
+    EntityLifecycleEvent entity_lifecycle = 11;
+    EntityDeltaTickEvent entity_delta_tick = 12;
+    WorldDeltaEvent world_delta = 13;
+    VoiceRelayEvent voice_relay = 14;
+    NpcStreamChunkEvent npc_stream_chunk = 15;
+    JoinRejectedEvent join_rejected = 16;
+    ReputationEvent reputation = 17;
+  }
+}
+
+message JoinCommand {
+  string username = 1;
+  string password = 2;
+  string room_code = 3; // blank = LOBBY
+}
+
+message AvatarUpdateCommand {
+  uint32 hat = 1;            // 0 none, 1 top hat, 2 bowler, 3 flat cap, 4 paddy cone
+  uint32 body_color_hex = 2;
+  uint32 eyes = 3;           // 0 round, 1 wide, 2 sleepy
+  uint32 mouth = 4;          // 0 smile, 1 flat, 2 grin
+  uint32 hair = 5;           // 0 none, 1 long, 2 topknot
+}
+
+message JoinRejectedEvent {
+  string reason = 1;
+}
+
+message MovementInputCommand {
+  uint32 key_bitmask = 1;      // 1=W, 2=S, 4=A, 8=D, 16=Jump, 32=Sprint
+  sint32 yaw_mrad = 2;         // radians * 1000
+  sint32 pitch_mrad = 3;       // radians * 1000
+  uint32 mic_energy_byte = 4;  // 0..255
+  uint32 face_state = 5;       // expression cell 0..5 from local webcam inference; 255 = none
+  sint32 head_roll_mrad = 6;   // webcam head roll; 0 when tracking off
+}
+
+message VoiceStreamCommand {
+  bytes opus_chunk = 1;
+  uint32 chunk_seq = 2;
+}
+
+message NpcAudioInteractCommand {
+  uint32 target_net_id = 1;
+  bytes audio_chunk = 2;
+  string transcript_hint = 3;
+  bool is_final_chunk = 4;
+}
+
+message WorldInteractCommand {
+  sint32 grid_x = 1;
+  sint32 grid_y = 2;
+  sint32 grid_z = 3;
+  uint32 structure_type = 4;
+}
+
+enum EntityType {
+  ENTITY_UNKNOWN = 0;
+  ENTITY_PLAYER = 1;
+  ENTITY_NPC = 2;
+}
+
+message EntitySpawnInfo {
+  uint32 net_id = 1;
+  EntityType type = 2;
+  string display_name = 3;
+  uint32 base_color_hex = 4;
+  sint32 x_mm = 5;
+  sint32 y_mm = 6;
+  sint32 z_mm = 7;
+  sint32 yaw_mrad = 8;
+  uint32 style_flags = 9; // bit 1 = female (long hair)
+  uint32 avatar_hat = 10;   // 255 = not customized (procedural style)
+  uint32 avatar_eyes = 11;  // 255 = not customized
+  uint32 avatar_mouth = 12; // 255 = not customized
+  uint32 avatar_hair = 13;  // 255 = not customized
+}
+
+message QuantizedEntityTransform {
+  uint32 net_id = 1;
+  sint32 x_mm = 2;
+  sint32 y_mm = 3;
+  sint32 z_mm = 4;
+  sint32 vx_mm = 5;
+  sint32 vz_mm = 6;
+  sint32 yaw_mrad = 7;
+  uint32 audio_energy_byte = 8;
+  sint32 vy_mm = 9;
+  uint32 face_state = 10; // relayed webcam expression; 255 = procedural
+  sint32 pitch_mrad = 11; // player camera pitch for head tilt; 0 for NPCs
+  sint32 head_roll_mrad = 12; // relayed webcam head roll; 0 = none
+  uint32 action_state = 13; // villager work animation: 0 none, 1 chop, 2 hammer, 3 farm, 4 tinker
+}
+
+message WorldDeltaRecord {
+  sint32 grid_x = 1;
+  sint32 grid_y = 2;
+  sint32 grid_z = 3;
+  uint32 structure_type = 4;
+  uint32 state_flags = 5;
+}
+
+message WelcomeEvent {
+  uint32 assigned_net_id = 1;
+  uint32 tick_rate_hz = 2; // 20
+  uint64 world_seed = 3;
+  repeated EntitySpawnInfo initial_entities = 4;
+  repeated WorldDeltaRecord active_deltas = 5;
+  sint32 reputation = 6; // the player's persisted standing with the villagers, 0..100
+}
+
+// Pushed when a conversation nudges the player's standing with the villagers.
+message ReputationEvent {
+  sint32 reputation = 1;  // new absolute value 0..100
+  sint32 delta = 2;       // signed change that produced it
+  string reason = 3;      // short human-readable cause (e.g. "Mabel warmed to you")
+}
+
+message EntityLifecycleEvent {
+  repeated EntitySpawnInfo spawned = 1;
+  repeated uint32 despawned_net_ids = 2;
+}
+
+message EntityDeltaTickEvent {
+  uint32 ack_input_seq = 1; // Highest ClientEnvelope.sequence_number processed for THIS recipient client
+  repeated QuantizedEntityTransform dirty_entities = 2;
+}
+
+message WorldDeltaEvent {
+  repeated WorldDeltaRecord deltas = 1;
+}
+
+message VoiceRelayEvent {
+  uint32 speaker_net_id = 1;
+  sint32 origin_x_mm = 2;
+  sint32 origin_z_mm = 3;
+  bytes opus_chunk = 4;
+  uint32 chunk_seq = 5;
+}
+
+message NpcStreamChunkEvent {
+  string interaction_id = 1;
+  uint32 npc_net_id = 2;
+  string text_delta = 3;
+  bytes audio_chunk = 4;
+  uint32 chunk_index = 5;
+  bool is_complete = 6;
+}

@@ -1,0 +1,18 @@
+# Gradle / IDE
+.gradle/
+build/
+.idea/
+.kotlin/
+
+# Local MariaDB data (Docker volume) — never commit
+db-data/
+
+# Logs & scratch
+*.log
+*.tmp
+*.tmp.*
+new-drawvillage.txt
+old-drawvillage.txt
+
+# Secrets
+.env
